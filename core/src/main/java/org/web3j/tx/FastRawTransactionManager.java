@@ -57,6 +57,14 @@ public class FastRawTransactionManager extends RawTransactionManager {
         super(web3j, credentials, chainId, transactionReceiptProcessor);
     }
 
+    public FastRawTransactionManager(
+            Web3j web3j,
+            TxSignService txSignService,
+            long chainId,
+            TransactionReceiptProcessor transactionReceiptProcessor) {
+        super(web3j, txSignService, chainId, transactionReceiptProcessor);
+    }
+
     @Override
     protected synchronized BigInteger getNonce() throws IOException {
         if (nonce.signum() == -1) {

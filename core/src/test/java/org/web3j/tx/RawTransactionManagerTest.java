@@ -26,17 +26,23 @@ import org.junit.jupiter.api.Test;
 
 import org.web3j.crypto.HSMHTTPPass;
 import org.web3j.crypto.SampleKeys;
+import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
+import org.web3j.protocol.exceptions.TransactionException;
 import org.web3j.service.HSMHTTPRequestProcessor;
 import org.web3j.service.TxHSMSignService;
 import org.web3j.service.TxSignService;
+import org.web3j.service.TxSignServiceImpl;
 import org.web3j.tx.exceptions.TxHashMismatchException;
+import org.web3j.tx.response.TransactionReceiptProcessor;
 import org.web3j.utils.Convert;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RawTransactionManagerTest extends ManagedTransactionTester {
@@ -96,5 +102,44 @@ class RawTransactionManagerTest extends ManagedTransactionTester {
         String sign = transactionManager.sign(createRawTx());
 
         assertEquals(TX_SIGN_RESULT_HEX, sign);
+    }
+
+    @Test
+    void testTxSignServiceWithPollingSettings() throws IOException {
+        prepareTransactionReceipt(null);
+        TxSignService txSignService = new TxSignServiceImpl(SampleKeys.CREDENTIALS);
+
+        RawTransactionManager transactionManager =
+                new RawTransactionManager(web3j, txSignService, ChainIdLong.NONE, 2, 1L);
+
+        assertThrows(
+                TransactionException.class,
+                () -> transactionManager.processResponse(sendTransactionResponse()));
+        verify(web3j, times(2)).ethGetTransactionReceipt(TRANSACTION_HASH);
+        assertEquals(SampleKeys.ADDRESS, transactionManager.getFromAddress());
+    }
+
+    @Test
+    void testTxSignServiceWithTransactionReceiptProcessor() throws Exception {
+        TransactionReceipt transactionReceipt = new TransactionReceipt();
+        TransactionReceiptProcessor transactionReceiptProcessor =
+                mock(TransactionReceiptProcessor.class);
+        when(transactionReceiptProcessor.waitForTransactionReceipt(TRANSACTION_HASH))
+                .thenReturn(transactionReceipt);
+        TxSignService txSignService = new TxSignServiceImpl(SampleKeys.CREDENTIALS);
+
+        RawTransactionManager transactionManager =
+                new RawTransactionManager(
+                        web3j, txSignService, ChainIdLong.NONE, transactionReceiptProcessor);
+
+        assertEquals(
+                transactionReceipt, transactionManager.processResponse(sendTransactionResponse()));
+        assertEquals(SampleKeys.ADDRESS, transactionManager.getFromAddress());
+    }
+
+    private static EthSendTransaction sendTransactionResponse() {
+        EthSendTransaction ethSendTransaction = new EthSendTransaction();
+        ethSendTransaction.setResult(TRANSACTION_HASH);
+        return ethSendTransaction;
     }
 }

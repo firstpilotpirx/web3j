@@ -19,11 +19,19 @@ import org.junit.jupiter.api.Test;
 
 import org.web3j.crypto.SampleKeys;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.methods.response.EthSendTransaction;
+import org.web3j.protocol.core.methods.response.TransactionReceipt;
+import org.web3j.service.TxSignService;
+import org.web3j.service.TxSignServiceImpl;
+import org.web3j.tx.response.TransactionReceiptProcessor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class FastRawTransactionManagerTest {
+    private static final String TRANSACTION_HASH = "0xHASH";
+
     private Web3j web3j;
     private FastRawTransactionManager fastRawTransactionManager;
 
@@ -41,5 +49,25 @@ class FastRawTransactionManagerTest {
 
         BigInteger currentNonce = fastRawTransactionManager.getCurrentNonce();
         assertEquals(currentNonce, BigInteger.valueOf(-1));
+    }
+
+    @Test
+    void txSignServiceWithTransactionReceiptProcessor() throws Exception {
+        TransactionReceipt transactionReceipt = new TransactionReceipt();
+        TransactionReceiptProcessor transactionReceiptProcessor =
+                mock(TransactionReceiptProcessor.class);
+        when(transactionReceiptProcessor.waitForTransactionReceipt(TRANSACTION_HASH))
+                .thenReturn(transactionReceipt);
+        TxSignService txSignService = new TxSignServiceImpl(SampleKeys.CREDENTIALS);
+        EthSendTransaction ethSendTransaction = new EthSendTransaction();
+        ethSendTransaction.setResult(TRANSACTION_HASH);
+
+        FastRawTransactionManager transactionManager =
+                new FastRawTransactionManager(
+                        web3j, txSignService, ChainIdLong.NONE, transactionReceiptProcessor);
+
+        assertEquals(transactionReceipt, transactionManager.processResponse(ethSendTransaction));
+        assertEquals(SampleKeys.ADDRESS, transactionManager.getFromAddress());
+        assertEquals(BigInteger.valueOf(-1), transactionManager.getCurrentNonce());
     }
 }
